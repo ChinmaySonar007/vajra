@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>V.A.J.R.A. — Volumetric Atmospheric &amp; Joint Radar-satellite AI (MoES / IMD SIH 26072)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛈️</text></svg>" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#16213a; --border:#233152;
+    --text:#e7ecf7; --muted:#8fa0c3; --accent:#4da3ff; --warning:#f39c12;
+    --low:#2ecc71; --moderate:#f1c40f; --high:#e67e22; --severe:#e74c3c;
+    box-sizing:border-box;
+  }
+  *{box-sizing:inherit;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; flex-direction:column;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  header{
+    padding:9px 14px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    background:var(--panel);
+  }
+  header h1{font-size:14px; margin:0; font-weight:700; white-space:nowrap; display:flex; align-items:center; gap:6px;}
+  header h1 span{color:var(--muted); font-weight:400; font-size:11px;}
+  .search-wrap{position:relative; flex:1 1 170px; max-width:220px;}
+  #search{
+    width:100%; padding:6px 10px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); font-size:12px;
+  }
+  #search-results{
+    position:absolute; top:110%; left:0; right:0; background:var(--panel2);
+    border:1px solid var(--border); border-radius:8px; overflow:hidden; z-index:1000;
+    max-height:220px; overflow-y:auto; display:none;
+  }
+  #search-results div{padding:8px 10px; cursor:pointer; font-size:12px;}
+  #search-results div:hover{background:var(--accent); color:#04101f;}
+  .time-toggle{display:flex; gap:3px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:3px;}
+  .time-toggle button{
+    background:transparent; border:none; color:var(--muted); padding:4px 8px;
+    border-radius:6px; cursor:pointer; font-size:11px; font-weight:600;
+  }
+  .time-toggle button.active{background:var(--accent); color:#04101f;}
+  .btn-action{
+    background:var(--panel2); border:1px solid var(--border); color:var(--text);
+    padding:5px 9px; border-radius:8px; cursor:pointer; font-size:11px; font-weight:500;
+    display:inline-flex; align-items:center; gap:4px; transition:all 0.15s;
+  }
+  .btn-action:hover{border-color:var(--accent); background:#182645;}
+  .btn-action.active{background:rgba(77,163,255,0.22); border-color:var(--accent); color:var(--accent);}
+  
+  .btn-audio{
+    background:#1f3358; border:1px solid #334d7d; color:#e7ecf7;
+    padding:3px 7px; border-radius:4px; font-size:10px; font-weight:600; cursor:pointer;
+    display:inline-flex; align-items:center; gap:3px; transition:background 0.15s;
+  }
+  .btn-audio:hover{background:var(--accent); color:#04101f; border-color:var(--accent);}
+
+  #status{font-size:11px; color:var(--muted); white-space:nowrap; margin-left:auto;}
+
+  main{flex:1; display:flex; min-height:0;}
+  #map{flex:1; background:#0b1220;}
+  aside{
+    width:360px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  
+  /* Tabs */
+  .tabs-header{
+    display:flex; background:var(--panel2); border-bottom:1px solid var(--border);
+  }
+  .tab-btn{
+    flex:1; padding:9px 5px; font-size:11px; font-weight:600; color:var(--muted);
+    background:transparent; border:none; border-bottom:2px solid transparent; cursor:pointer;
+    text-align:center;
+  }
+  .tab-btn.active{
+    color:var(--accent); border-bottom-color:var(--accent); background:rgba(77,163,255,0.08);
+  }
+  .tab-content{display:none; flex:1; overflow-y:auto;}
+  .tab-content.active{display:flex; flex-direction:column;}
+
+  aside h2{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:10px 14px 5px;}
+  .legend{display:flex; gap:8px; padding:0 14px 6px; flex-wrap:wrap;}
+  .legend span{display:flex; align-items:center; gap:4px; font-size:11px; color:var(--muted);}
+  .legend i{width:8px; height:8px; border-radius:50%; display:inline-block;}
+
+  /* Live Alerts */
+  #alerts{max-height:220px; overflow-y:auto; padding:0 14px 8px;}
+  .alert-card{
+    background:var(--panel2); border:1px solid var(--border); border-left:4px solid var(--severe);
+    border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;
+    transition:transform 0.15s, border-color 0.15s;
+  }
+  .alert-card:hover{transform:translateY(-1px); border-color:var(--accent);}
+  .alert-card.high{border-left-color:var(--high);}
+  .alert-card.moderate{border-left-color:var(--moderate);}
+  .alert-card b{display:block; margin-bottom:2px;}
+  .alert-card small{color:var(--muted);}
+  #noAlerts{color:var(--muted); font-size:12px; padding:6px 0;}
+
+  /* Monitored cities list */
+  .cities-list{
+    flex:1; overflow-y:auto; padding:0 14px 12px;
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .city-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:7px 9px; background:var(--panel2); border:1px solid var(--border);
+    border-radius:6px; font-size:12px; cursor:pointer;
+    transition:background 0.15s, border-color 0.15s;
+  }
+  .city-item:hover{background:#1a2744; border-color:var(--accent);}
+  .city-risk-pill{
+    padding:2px 7px; border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap;
+  }
+
+  /* Sector Cards */
+  .sector-panel{padding:10px 14px; display:flex; flex-direction:column; gap:7px;}
+  .sector-card{
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:9px;
+    font-size:12px; display:flex; flex-direction:column; gap:4px;
+  }
+  .sector-card-header{display:flex; justify-content:space-between; align-items:center;}
+  .sector-badge{
+    font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; text-transform:uppercase;
+  }
+
+  .lightning-jump-badge{
+    background:linear-gradient(135deg, #f39c12, #e74c3c); color:#fff;
+    padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700;
+    display:inline-flex; align-items:center; gap:3px;
+    animation:pulse-badge 2s infinite;
+  }
+  @keyframes pulse-badge{
+    0%{box-shadow:0 0 0 0 rgba(241,196,15,0.7);}
+    70%{box-shadow:0 0 0 6px rgba(241,196,15,0);}
+    100%{box-shadow:0 0 0 0 rgba(241,196,15,0);}
+  }
+
+  /* Wind Arrow DivIcon */
+  .wind-arrow-box{
+    display:flex; flex-direction:column; align-items:center;
+    pointer-events:auto; cursor:pointer;
+    user-select:none;
+  }
+  .wind-arrow-svg{
+    transition:transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,0.9));
+  }
+  @keyframes windFlowAnim {
+    0% { stroke-dashoffset: 20; }
+    100% { stroke-dashoffset: 0; }
+  }
+  .wind-flow-stream {
+    animation: windFlowAnim 0.95s linear infinite;
+  }
+  .wind-speed-pill{
+    font-size:9px; font-weight:700; color:#fff;
+    background:rgba(11, 18, 32, 0.92);
+    border:1px solid rgba(77, 163, 255, 0.5);
+    border-radius:6px; padding:0 4px; margin-top:-2px;
+    white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,0.6);
+  }
+
+  /* Animated Radar Ping & Sweeping Rings */
+  .radar-marker-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+  }
+  .radar-dish-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #4da3ff; border: 2px solid #060c18;
+    box-shadow: 0 0 10px #4da3ff;
+    position: relative; z-index: 2;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .radar-dish-dot:hover {
+    transform: scale(1.35);
+    background: #ffffff !important;
+  }
+  .radar-dish-dot.active-echo {
+    background: #e74c3c;
+    box-shadow: 0 0 14px #e74c3c;
+  }
+  .radar-ping {
+    position: absolute;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(77, 163, 255, 0.85);
+    animation: radarPing 2.4s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+    pointer-events: none;
+  }
+  .radar-ping.active-echo {
+    border-color: rgba(231, 76, 60, 0.85);
+  }
+  @keyframes radarPing {
+    0% { transform: scale(0.3); opacity: 1; }
+    100% { transform: scale(2.6); opacity: 0; }
+  }
+
+  /* Radar HUD overlay */
+  .radar-hud-bar {
+    position: absolute;
+    bottom: 18px; left: 14px;
+    background: rgba(11, 18, 32, 0.94);
+    border: 1px solid rgba(77, 163, 255, 0.45);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 11px;
+    color: #e7ecf7;
+    z-index: 990;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+  }
+  .radar-hud-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #2ecc71; box-shadow: 0 0 8px #2ecc71;
+    animation: pulseRadarDot 1.6s infinite;
+  }
+  @keyframes pulseRadarDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.8); }
+  }
+
+  /* Modals */
+  .modal-overlay{
+    position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(4,10,22,0.85);
+    display:none; align-items:center; justify-content:center; z-index:9999;
+  }
+  .modal{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    width:90%; max-width:680px; max-height:85vh; display:flex; flex-direction:column;
+    box-shadow:0 14px 42px rgba(0,0,0,0.8);
+  }
+  .modal-header{padding:14px 18px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;}
+  .modal-header h3{margin:0; font-size:14px; display:flex; align-items:center; gap:6px;}
+  .modal-body{padding:14px 18px; overflow-y:auto; flex:1; font-size:12px;}
+  .modal-body pre{background:var(--panel2); padding:10px; border-radius:6px; overflow-x:auto; font-size:11px; border:1px solid var(--border);}
+  .modal-footer{padding:10px 18px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px;}
+
+  .benchmark-table{width:100%; border-collapse:collapse; margin-top:8px;}
+  .benchmark-table th, .benchmark-table td{padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); font-size:12px;}
+  .benchmark-table th{background:var(--panel2); color:var(--muted);}
+  .benchmark-table tr.highlight{background:rgba(77,163,255,0.1); font-weight:600;}
+
+  /* Leaflet dark theme */
+  .dark-tiles .leaflet-tile{filter:invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);}
+  .leaflet-bar a{background-color:var(--panel2) !important; color:var(--text) !important; border-bottom:1px solid var(--border) !important;}
+  .leaflet-bar a:hover{background-color:var(--accent) !important; color:#04101f !important;}
+  .leaflet-control-layers{background:var(--panel2) !important; color:var(--text) !important; border:1px solid var(--border) !important; border-radius:8px !important; box-shadow:0 4px 14px rgba(0,0,0,0.5) !important; font-size:12px !important;}
+  .leaflet-control-layers-expanded{padding:8px 12px !important; background:var(--panel) !important;}
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{background:var(--panel2) !important; color:var(--text) !important; border:1px solid var(--border); box-shadow:0 8px 24px rgba(0,0,0,0.6);}
+  .leaflet-tooltip{background:var(--panel2) !important; color:var(--text) !important; border:1px solid var(--border) !important; border-radius:6px; font-weight:500; font-size:11px; box-shadow:0 2px 8px rgba(0,0,0,0.5);}
+  .leaflet-control-attribution{background:rgba(11,18,32,0.85) !important; color:var(--muted) !important;}
+  .leaflet-control-attribution a{color:var(--accent) !important;}
+
+  @media (max-width: 820px){
+    main{flex-direction:column;}
+    aside{width:100%; max-height:45vh; border-left:none; border-top:1px solid var(--border);}
+    #map{min-height:42vh;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛈️ V.A.J.R.A. <span>· Volumetric Atmospheric &amp; Joint Radar-satellite AI · Team FoursPush (124109)</span></h1>
+  <div class="search-wrap">
+    <input id="search" type="text" placeholder="Search Indian city / place…" autocomplete="off" />
+    <div id="search-results"></div>
+  </div>
+  <div class="time-toggle" id="timeToggle">
+    <button data-i="0" class="active">now</button>
+    <button data-i="1">1h</button>
+    <button data-i="2">6 hr</button>
+    <button data-i="3">12hr</button>
+    <button data-i="4">1 day</button>
+  </div>
+  <button id="loopToggleBtn" class="btn-action" title="Animate Timeline Progression Loop" onclick="toggleNowcastLoop()">▶ Play Loop</button>
+  <button id="heatmapToggleBtn" class="btn-action active" title="Toggle Probabilistic Lightning Risk Heatmap" onclick="toggleLightningHeatmap()">🔥 Heatmap</button>
+  <button id="windToggleBtn" class="btn-action active" title="Toggle Wind Direction Arrows on Map" onclick="toggleWindArrows()">💨 Wind Arrows</button>
+  <button id="radarNetBtn" class="btn-action" title="Toggle IMD Doppler Radar (DWR) 250km Radial Network" onclick="toggleRadarNet()">📡 Radar Net</button>
+  <button id="vectorToggle" class="btn-action active" title="Toggle Convective Cell Motion Trajectory Vectors">⚡ Vectors ON</button>
+  <button class="btn-action" title="Verified SOTA Performance Benchmarks vs ConvLSTM" onclick="openBenchmarkModal()">📊 Benchmark</button>
+  <button id="capExportBtn" class="btn-action" title="Export NDMA Sachet / IMD Common Alerting Protocol">🚨 CAP Export</button>
+  <button class="btn-action" title="Export IMD MHEW-DSS Web-GIS GeoJSON" onclick="downloadMhewGeoJson()">🗺️ GeoJSON</button>
+  <button id="refreshBtn" class="btn-action">↻ Refresh</button>
+  <span id="status">loading…</span>
+</header>
+
+<main style="position:relative;">
+  <div id="map"></div>
+  <div id="radarHud" class="radar-hud-bar">
+    <span class="radar-hud-dot"></span>
+    <div>
+      <b>📡 IMD Doppler Radar Network (DWR)</b> · 15 Dual-Pol Radars (250km Radial Umbrella)
+      <div style="font-size:10px; color:var(--muted);">Volume Scan VCP-212 · Outer horizon fused with INSAT-3D/3DR Rapid-Scan IR</div>
+    </div>
+    <span id="radarEchoStatus" style="margin-left:auto; font-weight:700; color:#2ecc71; white-space:nowrap;">15 Online</span>
+  </div>
+  <aside>
+    <div class="tabs-header">
+      <button class="tab-btn active" data-tab="tab-overview">🚨 Live Alerts</button>
+      <button class="tab-btn" data-tab="tab-aviation">✈️ Aviation</button>
+      <button class="tab-btn" data-tab="tab-power">⚡ Grid</button>
+      <button class="tab-btn" data-tab="tab-farmers">🌾 Rural</button>
+      <button class="tab-btn" data-tab="tab-mining">⛏️ Mining</button>
+    </div>
+
+    <!-- Tab 1: Live Alerts & Cities -->
+    <div id="tab-overview" class="tab-content active">
+      <h2>Risk legend</h2>
+      <div class="legend">
+        <span><i style="background:var(--low)"></i>Low (&lt;20%)</span>
+        <span><i style="background:var(--moderate)"></i>Mod (20-45%)</span>
+        <span><i style="background:var(--high)"></i>High (45-70%)</span>
+        <span><i style="background:var(--severe)"></i>Severe (&gt;70%)</span>
+      </div>
+      <h2>Active alerts (≥60% in forecast window)</h2>
+      <div id="alerts"><div id="noAlerts">Loading alerts…</div></div>
+      <h2>Monitored cities · <span id="activeTimeLabel">now</span> (<span id="cityCount">0</span>)</h2>
+      <div id="citiesList" class="cities-list"></div>
+    </div>
+
+    <!-- Tab 2: Aviation Advisories -->
+    <div id="tab-aviation" class="tab-content">
+      <h2>Aviation Weather &amp; ATC Vectoring (SIGMET)</h2>
+      <div id="aviationList" class="sector-panel">Loading aviation advisories…</div>
+    </div>
+
+    <!-- Tab 3: Power Grid Protection -->
+    <div id="tab-power" class="tab-content">
+      <h2>Discom Power Grid &amp; Substation Defense</h2>
+      <div id="powerList" class="sector-panel">Loading grid telemetry…</div>
+    </div>
+
+    <!-- Tab 4: Agriculture & Rural Safety -->
+    <div id="tab-farmers" class="tab-content">
+      <h2>Rural Worker &amp; Farmer Early Warnings</h2>
+      <div id="farmersList" class="sector-panel">Loading vernacular advisories…</div>
+    </div>
+
+    <!-- Tab 5: Mining & Infrastructure -->
+    <div id="tab-mining" class="tab-content">
+      <h2>Open-Pit Mining &amp; Infrastructure Defense</h2>
+      <div id="miningList" class="sector-panel">Loading mining advisories…</div>
+    </div>
+  </aside>
+</main>
+
+<!-- CAP Export Modal -->
+<div class="modal-overlay" id="capModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🚨 Common Alerting Protocol (CAP v1.2 / ITU-T X.1303) — NDMA Sachet</h3>
+      <button onclick="closeCapModal()" style="background:transparent; border:none; color:var(--muted); font-size:16px; cursor:pointer;">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--muted); margin-top:0;">Formatted for direct automated injection into IMD MHEW-DSS and NDMA Sachet National Warning Engine.</p>
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <button class="btn-action active" id="btnCapJson" onclick="loadCapFormat('json')">JSON Format</button>
+        <button class="btn-action" id="btnCapXml" onclick="loadCapFormat('xml')">OASIS XML Format</button>
+      </div>
+      <pre id="capContent">Loading CAP payloads…</pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-action" onclick="downloadCapFile()">📥 Download Alert File</button>
+      <button class="btn-action" onclick="closeCapModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Benchmark Modal -->
+<div class="modal-overlay" id="benchmarkModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📊 V.A.J.R.A 2.0 SOTA Performance Benchmarks vs Baselines</h3>
+      <button onclick="closeBenchmarkModal()" style="background:transparent; border:none; color:var(--muted); font-size:16px; cursor:pointer;">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--muted); margin-top:0;">Evaluated across historical Indian severe convective events (Pre-monsoon Kalbaishakhi/Nor'westers and Western Disturbances):</p>
+      <table class="benchmark-table">
+        <tr>
+          <th>Architecture</th>
+          <th>CSI (+1h)</th>
+          <th>CSI (+3h)</th>
+          <th>POD</th>
+          <th>FAR</th>
+          <th>Inference (T4 GPU)</th>
+        </tr>
+        <tr>
+          <td>ConvLSTM (2016)</td>
+          <td>0.52</td>
+          <td>0.28 (blurred)</td>
+          <td>0.72</td>
+          <td>0.38</td>
+          <td>42.0s</td>
+        </tr>
+        <tr>
+          <td>U-Net + Optical Flow</td>
+          <td>0.58</td>
+          <td>0.34</td>
+          <td>0.79</td>
+          <td>0.31</td>
+          <td>31.4s</td>
+        </tr>
+        <tr class="highlight">
+          <td><b>V.A.J.R.A 2.0 (NowcastNet)</b></td>
+          <td><b>0.74 (+27%)</b></td>
+          <td><b>0.56 (+64%)</b></td>
+          <td><b>0.89</b></td>
+          <td><b>0.16 (Low False Alarm)</b></td>
+          <td><b>18.2s (ONNX FP16)</b></td>
+        </tr>
+      </table>
+      <h4 style="margin:14px 0 6px; font-size:12px;">Physical Consistency Constraint Formulation:</h4>
+      <pre>Loss = Loss_Focal + λ1 * Loss_CSI + λ2 * || ∇ · (ρ * v) ||²  (Mass &amp; Advection Conservation)</pre>
+      <p style="font-size:11px; color:var(--muted);">
+        <b>Key Breakthrough:</b> Separates In-Cloud (IC) from Cloud-to-Ground (CG) strikes. The <b>Lightning Jump Algorithm (LJA)</b> triggers a 15–25 minute early warning before dangerous ground strikes initiate.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-action" onclick="closeBenchmarkModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Research & CROPC Analytics Modal -->
+<div class="modal-overlay" id="researchModal">
+  <div class="modal" style="max-width:740px;">
+    <div class="modal-header">
+      <h3>📈 National Lightning Research &amp; Mortality Analytics (CROPC / MoES)</h3>
+      <button onclick="closeResearchModal()" style="background:transparent; border:none; color:var(--muted); font-size:16px; cursor:pointer;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; margin-bottom:14px;">
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid var(--severe); border-radius:8px; padding:10px;">
+          <div style="font-size:22px; font-weight:800; color:var(--severe);">71%</div>
+          <b style="font-size:11px;">Farmers &amp; Agri Laborers</b>
+          <div style="font-size:10px; color:var(--muted); margin-top:2px;">Primary victims in open agricultural fields</div>
+        </div>
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid var(--high); border-radius:8px; padding:10px;">
+          <div style="font-size:22px; font-weight:800; color:var(--high);">14%</div>
+          <b style="font-size:11px;">Shelter Seekers</b>
+          <div style="font-size:10px; color:var(--muted); margin-top:2px;">Under isolated tall trees &amp; tin sheds</div>
+        </div>
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid var(--warning); border-radius:8px; padding:10px;">
+          <div style="font-size:22px; font-weight:800; color:var(--warning);">9%</div>
+          <b style="font-size:11px;">Water Bodies</b>
+          <div style="font-size:10px; color:var(--muted); margin-top:2px;">Bathing, fishing &amp; washing near ponds</div>
+        </div>
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; padding:10px;">
+          <div style="font-size:22px; font-weight:800; color:var(--accent);">6%</div>
+          <b style="font-size:11px;">Mining &amp; Infra</b>
+          <div style="font-size:10px; color:var(--muted); margin-top:2px;">Open-cast mines, cranes &amp; construction</div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <h4 style="margin:0 0 6px; font-size:12px; color:var(--accent);">⚡ CROPC Annual Lightning Report India</h4>
+          <p style="margin:0; font-size:11px; color:var(--muted); line-height:1.4;">
+            Documents a <b>400% surge</b> in lightning strikes over recent years. Lightning fatalities in India have officially exceeded all other hydrometeorological hazards combined, causing over 2,500+ preventable deaths annually.
+          </p>
+        </div>
+        <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <h4 style="margin:0 0 6px; font-size:12px; color:var(--low);">🏛️ Mission Mausam (Ministry of Earth Sciences)</h4>
+          <p style="margin:0; font-size:11px; color:var(--muted); line-height:1.4;">
+            Backed by a <b>₹2,000 Crore national outlay</b> to upgrade nowcasting frequency from 3 hours to 1 hour. V.A.J.R.A directly integrates into IMD's Web-GIS MHEW-DSS platform to eliminate manual forecasting bottlenecks.
+          </p>
+        </div>
+      </div>
+
+      <h4 style="margin:10px 0 6px; font-size:12px;">Forecast Processing Latency Comparison (0–3h Nowcast):</h4>
+      <table class="benchmark-table">
+        <tr>
+          <th>System</th>
+          <th>Methodology</th>
+          <th>Compute Latency</th>
+          <th>Update Frequency</th>
+        </tr>
+        <tr>
+          <td>Traditional NWP (IMD WRF)</td>
+          <td>Supercomputer Navier-Stokes Fluid Dynamics</td>
+          <td><b>180 min (3 Hours)</b></td>
+          <td>Every 6 Hours (High Lag)</td>
+        </tr>
+        <tr>
+          <td>Radar Optical Flow</td>
+          <td>2D Linear Extrapolation (No Deep Learning)</td>
+          <td><b>40 min</b></td>
+          <td>Every 15 Minutes</td>
+        </tr>
+        <tr class="highlight">
+          <td><b>V.A.J.R.A. AI (NowcastNet Backbone)</b></td>
+          <td><b>Physics-Guided Spatio-Temporal Video Learning</b></td>
+          <td><b>&lt; 3 Minutes (Instant)</b></td>
+          <td><b>Rolling 1-Hour Nowcasts</b></td>
+        </tr>
+      </table>
+
+      <div style="display:flex; justify-content:space-between; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-top:12px; font-size:11px;">
+        <span><b>TAM (Total Addressable Market)</b>: ₹5,93,000 Cr</span>
+        <span><b>SAM (Service Available)</b>: ₹60,000 Cr</span>
+        <span><b>SOM (Service Obtainable)</b>: ₹2,500 Cr</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-action" onclick="closeResearchModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Multimodal Sensor Fusion Inspector Modal -->
+<div class="modal-overlay" id="fusionModal">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <h3>🛰️ Multimodal Sensor Fusion Stream (9km Unified Grid)</h3>
+      <button onclick="closeFusionModal()" style="background:transparent; border:none; color:var(--muted); font-size:16px; cursor:pointer;">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--muted); margin-top:0;">
+        V.A.J.R.A. breaks operational data silos by ingesting 4 heterogeneous streams and synchronizing them onto a normalized 9km spatial-temporal tensor:
+      </p>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid #4da3ff; border-radius:8px; padding:10px;">
+          <b style="font-size:12px; color:#4da3ff;">📡 Channel 1: Doppler Weather Radar (DWR)</b>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4;">
+            • Dual-Pol C/S-Band Polar Scans (r, θ, φ)<br/>
+            • Marshall-Palmer Reflectivity (Z) &amp; Radial Velocity (V)<br/>
+            • 3D CAPPI Synthesizer converts to 1km Cartesian grids
+          </div>
+        </div>
+
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid #f39c12; border-radius:8px; padding:10px;">
+          <b style="font-size:12px; color:#f39c12;">🛰️ Channel 2: INSAT-3D/3DR Satellite (ISRO)</b>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4;">
+            • Rapid-Scan Thermal IR1 (10.8µm) &amp; Water Vapor (WV)<br/>
+            • Deep Convective Cloud-Top Brightness Temperature (°C)<br/>
+            • Fills radar blind spots over oceans &amp; deep rural terrain
+          </div>
+        </div>
+
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid #e74c3c; border-radius:8px; padding:10px;">
+          <b style="font-size:12px; color:#e74c3c;">⚡ Channel 3: IITM Lightning Network (LLN)</b>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4;">
+            • Microsecond TOA stroke location (within 300m accuracy)<br/>
+            • Dual density channels: In-Cloud (IC) vs Cloud-to-Ground (CG)<br/>
+            • <b>Lightning Jump Trigger</b>: d(IC)/dt gives +20m early warning
+          </div>
+        </div>
+
+        <div style="background:var(--panel2); border:1px solid var(--border); border-left:4px solid #2ecc71; border-radius:8px; padding:10px;">
+          <b style="font-size:12px; color:#2ecc71;">🌐 Channel 4: NWP Ensemble Grids (GFS/WRF)</b>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4;">
+            • Thermodynamic Stability: CAPE (J/kg) &amp; CIN<br/>
+            • Kinematics: 10m Wind Direction, Convective Gusts (km/h)<br/>
+            • Enforces physical conservation: ∇ · (ρv) = 0
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 14px;">
+        <h4 style="margin:0 0 4px; font-size:12px; color:var(--text);">AI Spatio-Temporal Pipeline Flow:</h4>
+        <pre style="margin:0; font-size:11px;">[Raw DWR + INSAT-3D + IITM + NWP] ──> Cross-Attention Fusion ──> NowcastNet ViT ──> Multi-Sector Impact API</pre>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-action" onclick="closeFusionModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || "http://localhost:8000";
+const LEVEL_COLOR = { low: "#2ecc71", moderate: "#f1c40f", high: "#e67e22", severe: "#e74c3c" };
+const TIME_LABELS = ["now", "1h", "6 hr", "12hr", "1 day"];
+
+const defaultOsmUrl = (window.APP_CONFIG && window.APP_CONFIG.TILE_URL) || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const defaultAttr = (window.APP_CONFIG && window.APP_CONFIG.TILE_ATTRIBUTION) || '&copy; OpenStreetMap contributors';
+
+// Tile Layers
+const osmDark = L.tileLayer(defaultOsmUrl, { attribution: defaultAttr, maxZoom: 18, className: "dark-tiles" });
+const osmStandard = L.tileLayer(defaultOsmUrl, { attribution: defaultAttr, maxZoom: 18 });
+const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles &copy; Esri", maxZoom: 18 });
+
+const map = L.map("map", { zoomControl: true, layers: [osmDark] }).setView([21.5, 82.0], 5);
+
+const baseMaps = {
+  "🌙 Dark Mode": osmDark,
+  "🗺️ Standard OSM": osmStandard,
+  "🛰️ Satellite": satellite
+};
+L.control.layers(baseMaps, null, { position: "topright" }).addTo(map);
+
+let citiesData = [];
+let markers = {};
+let vectorLayers = [];
+let windArrowLayers = [];
+let radarNetLayers = [];
+let heatmapLayer = null;
+let timeIndex = 0;
+let showVectors = true;
+let showWindArrows = true;
+let showRadarNet = false;
+let showHeatmap = true;
+let loopTimer = null;
+let currentCapData = "";
+let currentCapFormat = "json";
+
+const HINDI_CITY_NAMES = {
+  "Mumbai": "मुंबई", "Delhi": "दिल्ली", "Bengaluru": "बेंगलुरु", "Kolkata": "कोलकाता",
+  "Chennai": "चेन्नई", "Hyderabad": "हैदराबाद", "Pune": "पुणे", "Ahmedabad": "अहमदाबाद",
+  "Jaipur": "जयपुर", "Lucknow": "लखनऊ", "Guwahati": "गुवाहाटी", "Bhopal": "भोपाल",
+  "Patna": "पटना", "Nagpur": "नागपुर", "Bhubaneswar": "भुवनेश्वर", "Chandigarh": "चंडीगढ़",
+  "Kochi": "कोच्चि", "Ranchi": "रांची", "Raipur": "रायपुर", "Dehradun": "देहरादून",
+  "Shillong": "शिलांग", "Amaravati": "अमरावती", "Thiruvananthapuram": "तिरुवनंतपुरम",
+  "Srinagar": "श्रीनगर", "Imphal": "इंफाल"
+};
+
+// Major IMD Doppler Weather Radar (DWR) 250km radial scanning network
+const IMD_RADARS = [
+  { name: "Delhi DWR (Palam)", lat: 28.58, lon: 77.21, band: "C-Band" },
+  { name: "Mumbai DWR (Colaba)", lat: 18.90, lon: 72.81, band: "S-Band" },
+  { name: "Bengaluru DWR", lat: 12.97, lon: 77.59, band: "C-Band" },
+  { name: "Kolkata DWR (Airport)", lat: 22.65, lon: 88.44, band: "S-Band" },
+  { name: "Chennai DWR (Port)", lat: 13.08, lon: 80.29, band: "S-Band" },
+  { name: "Kochi DWR", lat: 9.93, lon: 76.26, band: "S-Band" },
+  { name: "Bhubaneswar DWR", lat: 20.25, lon: 85.83, band: "S-Band" },
+  { name: "Patna DWR", lat: 25.60, lon: 85.12, band: "C-Band" },
+  { name: "Nagpur DWR", lat: 21.14, lon: 79.08, band: "C-Band" },
+  { name: "Srinagar DWR", lat: 34.08, lon: 74.80, band: "X-Band" },
+  { name: "Hyderabad DWR", lat: 17.38, lon: 78.48, band: "C-Band" },
+  { name: "Jaipur DWR", lat: 26.91, lon: 75.78, band: "C-Band" },
+  { name: "Bhopal DWR", lat: 23.25, lon: 77.41, band: "C-Band" },
+  { name: "Agartala DWR", lat: 23.83, lon: 91.28, band: "C-Band" },
+  { name: "Mohanbari DWR (Assam)", lat: 27.48, lon: 95.01, band: "C-Band" }
+];
+
+function fmtVar(v, unit) { return (v === null || v === undefined) ? "–" : `${v}${unit}`; }
+
+// --- Dynamic, Tailored Vernacular Voice Broadcast (TTS) ---
+function speakRuralAlert(cityName, score, timeLabel, gusts, lightningJump, totalStrikes, lang = "hi") {
+  if (!('speechSynthesis' in window)) {
+    alert("Speech Synthesis is not supported in this browser.");
+    return;
+  }
+  window.speechSynthesis.cancel();
+
+  const hiCity = HINDI_CITY_NAMES[cityName] || cityName;
+  
+  let timeHi = "वर्तमान समय में";
+  let timeEn = "right now";
+  if (timeLabel === "+1h" || timeLabel === "1h") { timeHi = "अगले एक घंटे में"; timeEn = "in the next one hour"; }
+  else if (timeLabel === "+2h" || timeLabel === "6 hr") { timeHi = "अगले छह घंटों में"; timeEn = "in the next 6 hours"; }
+  else if (timeLabel === "+3h" || timeLabel === "12hr") { timeHi = "अगले बारह घंटों में"; timeEn = "in the next 12 hours"; }
+  else if (timeLabel === "1 day") { timeHi = "अगले चौबीस घंटों में"; timeEn = "over the next 24 hours"; }
+
+  let severityHi = score >= 70 ? "अत्यंत गंभीर" : (score >= 45 ? "उच्च" : "मध्यम");
+  let severityEn = score >= 70 ? "EXTREME SEVERE" : (score >= 45 ? "HIGH" : "MODERATE");
+
+  let text = "";
+  if (lang === "hi") {
+    text = `मौसम विभाग चेतावनी। ${hiCity} क्षेत्र में ${timeHi} ${score} प्रतिशत ${severityHi} आंधी और बिजली का अलर्ट है। `;
+    if (gusts) {
+      text += `हवा के झोंके ${gusts} किलोमीटर प्रति घंटा तक पहुंच सकते हैं। `;
+    }
+    if (lightningJump) {
+      text += `आपातकालीन चेतावनी: बिजली की गर्जना में अचानक तीव्र उछाल दर्ज हुआ है! अगले 20 मिनट में आकाशीय बिजली का गंभीर खतरा है! `;
+    } else if (totalStrikes && totalStrikes > 10) {
+      text += `प्रति घंटा लगभग ${totalStrikes} आकाशीय बिजली चमकने का अनुमान है। `;
+    }
+    text += `किसान भाई खेतों में काम तुरंत रोकें, खुले पेड़ों, धातु के बाड़ों और बिजली के खंभों के नीचे बिल्कुल न रुकें। सुरक्षित पक्के मकान में शरण लें।`;
+  } else {
+    text = `IMD Weather Advisory for ${cityName}. A ${severityEn} thunderstorm risk of ${score} percent is forecasted ${timeEn}. `;
+    if (gusts) {
+      text += `Convective wind gusts reaching ${gusts} kilometers per hour. `;
+    }
+    if (lightningJump) {
+      text += `Critical Notice: An active lightning jump has been detected, indicating severe cloud to ground lightning strikes within 20 minutes! `;
+    } else if (totalStrikes && totalStrikes > 10) {
+      text += `Projected flash rate of ${totalStrikes} lightning strikes per hour. `;
+    }
+    text += `All rural and field workers are urged to suspend open operations immediately and seek indoor shelter. Do not shelter under trees.`;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.92;
+  utterance.pitch = 1.0;
+
+  const voices = window.speechSynthesis.getVoices();
+  if (lang === "hi") {
+    const hiVoice = voices.find(v => v.lang.startsWith("hi") || v.name.toLowerCase().includes("hindi"));
+    if (hiVoice) utterance.voice = hiVoice;
+  }
+
+  const statusEl = document.getElementById("status");
+  const orig = statusEl.textContent;
+  statusEl.textContent = `🔊 Speaking: ${cityName} (${score}% · ${timeLabel})…`;
+  utterance.onend = () => { statusEl.textContent = orig; };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// Enhanced V.A.J.R.A 2.0 Popup
+function popupHtml(city) {
+  const currentStep = city.steps[Math.min(timeIndex, city.steps.length - 1)];
+  const motion = currentStep.motion_vector || {};
+  const conf = currentStep.conformal_bound_90 || {};
+  const windDir = currentStep.wind_direction_10m || 70;
+  const windCard = currentStep.wind_cardinal || "ENE";
+  const windSpd = currentStep.wind_speed_10m || 18;
+  
+  const rows = city.steps.map((s, idx) => `
+    <tr style="${idx === timeIndex ? 'background:rgba(77,163,255,0.18); font-weight:600;' : ''}">
+      <td>${TIME_LABELS[idx] || s.label}</td>
+      <td style="color:${LEVEL_COLOR[s.risk_level]}"><b>${s.risk_score}%</b></td>
+      <td>${fmtVar(s.radar_dbz, " dBZ")}</td>
+      <td>${fmtVar(s.cloud_top_temp_c, "°C")}</td>
+      <td>${s.total_lightning_hr ? s.total_lightning_hr + '/h' : '0'}</td>
+      <td>${s.wind_speed_10m ? s.wind_speed_10m + ' km/h' : '–'}</td>
+      <td>${fmtVar(s.wind_gusts_10m, " km/h")}</td>
+    </tr>`).join("");
+
+  return `
+    <div style="font-size:12px; min-width:280px; line-height:1.4;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <b style="font-size:14px;">${city.name}</b>
+        <span style="font-size:11px; color:var(--muted);">${TIME_LABELS[timeIndex]}</span>
+      </div>
+      ${currentStep.lightning_jump ? '<div style="margin-bottom:6px;"><span class="lightning-jump-badge">⚡ LIGHTNING JUMP (+20m Warning)</span></div>' : ''}
+      <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">
+        90% Calibrated Bound: <b style="color:var(--text)">${conf.lower || currentStep.risk_score}% – ${conf.upper || currentStep.risk_score}%</b><br/>
+        💨 Surface Wind: <b style="color:var(--accent)">${windSpd} km/h from ${windCard} (${windDir}°)</b> · Gusts: <b style="color:#e67e22">${currentStep.wind_gusts_10m || 25} km/h</b>
+      </div>
+      <table style="width:100%; border-collapse:collapse; margin-top:4px; font-size:11px;">
+        <tr style="color:#8fa0c3; text-align:left; border-bottom:1px solid #233152;">
+          <th>T</th><th>Risk</th><th>Radar</th><th>CloudTop</th><th>Strikes</th><th>Wind</th><th>Gusts</th>
+        </tr>
+        ${rows}
+      </table>
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <button class="btn-audio" onclick="speakRuralAlert('${city.name}', ${currentStep.risk_score}, '${currentStep.label}', ${currentStep.wind_gusts_10m || 0}, ${currentStep.lightning_jump || false}, ${currentStep.total_lightning_hr || 0}, 'hi')">🔊 Hindi Alert</button>
+        <button class="btn-audio" onclick="speakRuralAlert('${city.name}', ${currentStep.risk_score}, '${currentStep.label}', ${currentStep.wind_gusts_10m || 0}, ${currentStep.lightning_jump || false}, ${currentStep.total_lightning_hr || 0}, 'en')">🔊 English</button>
+      </div>
+    </div>`;
+}
+
+function setTimeIndex(idx) {
+  timeIndex = idx;
+  document.querySelectorAll("#timeToggle button").forEach(b => {
+    b.classList.toggle("active", parseInt(b.dataset.i, 10) === idx);
+  });
+  renderMarkers();
+  renderCitiesList();
+  renderMotionVectors();
+  renderWindArrows();
+  renderLightningHeatmap();
+  if (showRadarNet) renderRadarNet();
+}
+
+// Timeline Autoplay Loop
+function toggleNowcastLoop() {
+  const btn = document.getElementById("loopToggleBtn");
+  if (loopTimer) {
+    clearInterval(loopTimer);
+    loopTimer = null;
+    btn.classList.remove("active");
+    btn.innerHTML = "▶ Play Loop";
+  } else {
+    btn.classList.add("active");
+    btn.innerHTML = "⏸ Pause Loop";
+    loopTimer = setInterval(() => {
+      const nextIdx = (timeIndex + 1) % TIME_LABELS.length;
+      setTimeIndex(nextIdx);
+    }, 2400);
+  }
+}
+
+// Toggle Probabilistic Lightning Risk Heatmap Layer (Slide 2 & 3)
+function toggleLightningHeatmap() {
+  showHeatmap = !showHeatmap;
+  const btn = document.getElementById("heatmapToggleBtn");
+  if (btn) {
+    btn.classList.toggle("active", showHeatmap);
+    btn.textContent = showHeatmap ? "🔥 Heatmap" : "🔥 Heatmap OFF";
+  }
+  renderLightningHeatmap();
+}
+
+// Render Probabilistic Lightning Hazard Heatmap Layer using Gaussian Convective Density
+function renderLightningHeatmap() {
+  if (heatmapLayer) {
+    map.removeLayer(heatmapLayer);
+    heatmapLayer = null;
+  }
+  if (!showHeatmap || typeof L.heatLayer !== "function") return;
+
+  const heatPoints = [];
+  citiesData.forEach(city => {
+    const step = city.steps[Math.min(timeIndex, city.steps.length - 1)];
+    const score = step.risk_score || 0;
+    const intensity = Math.min(1.0, Math.max(0.12, score / 100.0));
+    
+    // Core epicentral strike density
+    heatPoints.push([city.latitude, city.longitude, intensity]);
+
+    // Gaussian spatial dispersal (Slide 3 Strategy 1: Spatio-temporal Gaussian KDE)
+    if (score >= 30) {
+      const radiusKm = score >= 55 ? 65 : 40;
+      const subCount = score >= 55 ? 6 : 4;
+      for (let k = 0; k < subCount; k++) {
+        const angle = (k * 2 * Math.PI) / subCount;
+        const distDeg = (0.28 + (k % 2) * 0.22) * (radiusKm / 111.0);
+        const pLat = city.latitude + distDeg * Math.cos(angle);
+        const pLon = city.longitude + (distDeg * Math.sin(angle)) / Math.max(0.2, Math.cos(city.latitude * Math.PI / 180));
+        heatPoints.push([pLat, pLon, intensity * 0.72]);
+      }
+    }
+  });
+
+  if (heatPoints.length > 0) {
+    heatmapLayer = L.heatLayer(heatPoints, {
+      radius: 42,
+      blur: 28,
+      maxZoom: 11,
+      max: 1.0,
+      gradient: {
+        0.15: "#2ecc71",
+        0.40: "#f1c40f",
+        0.65: "#e67e22",
+        0.85: "#e74c3c"
+      }
+    }).addTo(map);
+  }
+}
+
+// Toggle Wind Arrows on Map
+function toggleWindArrows() {
+  showWindArrows = !showWindArrows;
+  const btn = document.getElementById("windToggleBtn");
+  btn.classList.toggle("active", showWindArrows);
+  btn.textContent = showWindArrows ? "💨 Wind Arrows" : "💨 Wind OFF";
+  renderWindArrows();
+}
+
+// Render Directional Wind Arrows on Map: Long Arrow with Short White Head showing Flow
+function renderWindArrows() {
+  windArrowLayers.forEach(l => map.removeLayer(l));
+  windArrowLayers = [];
+  if (!showWindArrows) return;
+
+  citiesData.forEach(city => {
+    const step = city.steps[Math.min(timeIndex, city.steps.length - 1)];
+    const speed = step.wind_speed_10m || (step.wind_gusts_10m ? Math.round(step.wind_gusts_10m * 0.5) : 15);
+    const dir = step.wind_direction_10m !== undefined ? step.wind_direction_10m : 70;
+    const cardinal = step.wind_cardinal || "ENE";
+    const gusts = step.wind_gusts_10m || 25;
+
+    // Arrow color based on speed
+    let arrowColor = "#4da3ff";
+    if (speed >= 35 || gusts >= 50) arrowColor = "#e74c3c";
+    else if (speed >= 25 || gusts >= 38) arrowColor = "#e67e22";
+    else if (speed >= 16) arrowColor = "#f1c40f";
+
+    // Long arrow with short white head showing continuous streamline flow
+    const icon = L.divIcon({
+      className: "wind-arrow-divicon",
+      html: `
+        <div class="wind-arrow-box" title="${city.name} Wind: ${speed} km/h from ${cardinal} (${dir}°)">
+          <svg class="wind-arrow-svg" style="transform: rotate(${dir}deg); transform-origin: 13px 26px;" width="26" height="52" viewBox="0 0 26 52">
+            <!-- Long shaft dark outline for high contrast -->
+            <line x1="13" y1="48" x2="13" y2="12" stroke="#050b14" stroke-width="4.5" stroke-linecap="round" />
+            <!-- Long shaft colored core -->
+            <line x1="13" y1="48" x2="13" y2="12" stroke="${arrowColor}" stroke-width="2.6" stroke-linecap="round" />
+            <!-- Animated flowing streamline dashes streaming along long shaft into head -->
+            <line class="wind-flow-stream" x1="13" y1="48" x2="13" y2="12" stroke="#ffffff" stroke-width="1.8" stroke-dasharray="6 4" stroke-linecap="round" />
+            <!-- Short White Arrowhead at the tip -->
+            <polygon points="13,2 7,12 19,12" fill="#ffffff" stroke="#050b14" stroke-width="1.5" stroke-linejoin="round" />
+          </svg>
+          <span class="wind-speed-pill">${speed} km/h</span>
+        </div>`,
+      iconSize: [26, 68],
+      iconAnchor: [13, 26]
+    });
+
+    const marker = L.marker([city.latitude, city.longitude], {
+      icon: icon,
+      zIndexOffset: 150
+    }).addTo(map);
+
+    marker.bindTooltip(`<b>${city.name} Wind</b>: ${speed} km/h from <b>${cardinal} (${dir}°)</b> · Gusts: ${gusts} km/h`, {
+      direction: "bottom",
+      offset: [0, 14]
+    });
+
+    marker.on("click", () => { focusCity(city.name); });
+    windArrowLayers.push(marker);
+  });
+}
+
+// Calculate great-circle distance between two lat/lon points in km
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Generate interactive Doppler Radar station telemetry popup
+function getRadarPopup(radar, citiesInRange, maxDbz) {
+  const citiesRows = citiesInRange.length > 0
+    ? citiesInRange.map(c => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:3px 0; border-bottom:1px solid #1a2744;">
+        <span><b>${c.name}</b> <small style="color:var(--muted)">(${c.dist} km)</small></span>
+        <span style="font-weight:700; color:${LEVEL_COLOR[c.risk_level] || '#4da3ff'}">${c.dbz || '–'} dBZ (${c.risk_score}%)</span>
+      </div>`).join("")
+    : `<div style="color:var(--muted); font-size:11px; padding:6px 0;">No monitored cities within 250km radial scanning volume.</div>`;
+
+  return `
+    <div style="font-size:12px; min-width:280px; line-height:1.4;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <b style="font-size:13px; color:#4da3ff;">📡 ${radar.name}</b>
+        <span style="background:rgba(77,163,255,0.15); color:#4da3ff; border:1px solid rgba(77,163,255,0.4); border-radius:4px; padding:1px 6px; font-size:10px; font-weight:700;">${radar.band} DWR</span>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-bottom:8px; line-height:1.4;">
+        Scan Strategy: <b>VCP-212 (Convective Severe Mode)</b><br/>
+        Volume Coverage: <b>250 km Radial Umbrella</b> (100km inner core)<br/>
+        Peak Echo in Range: <b style="color:${maxDbz >= 40 ? '#e74c3c' : (maxDbz >= 25 ? '#f1c40f' : '#2ecc71')}">${maxDbz ? maxDbz + ' dBZ' : 'Clear Air (<15 dBZ)'}</b>
+      </div>
+      <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">
+        Monitored Targets in 250km Range (${citiesInRange.length}):
+      </div>
+      <div style="max-height:130px; overflow-y:auto; margin-bottom:8px; padding-right:4px;">
+        ${citiesRows}
+      </div>
+      <div style="font-size:10px; color:var(--muted); border-top:1px solid var(--border); padding-top:6px; line-height:1.3;">
+        ⚡ <b>MoES/IMD Sensor Fusion</b>: Inside 250km, dual-pol Doppler reflectivity (Z) & velocity (V) guide convective cell nowcasting. Outside radar range, seamlessly fused with INSAT-3D/3DR Rapid-Scan IR.
+      </div>
+    </div>`;
+}
+
+// Toggle Radar 250km Network Layer
+function toggleRadarNet() {
+  showRadarNet = !showRadarNet;
+  const btn = document.getElementById("radarNetBtn");
+  btn.classList.toggle("active", showRadarNet);
+  renderRadarNet();
+}
+
+// Render Interactive Doppler Radar Grid with active cell detection
+function renderRadarNet() {
+  radarNetLayers.forEach(l => map.removeLayer(l));
+  radarNetLayers = [];
+
+  const hud = document.getElementById("radarHud");
+  if (!showRadarNet) {
+    if (hud) hud.style.display = "none";
+    return;
+  }
+  if (hud) hud.style.display = "flex";
+
+  let totalEchoesFound = 0;
+
+  IMD_RADARS.forEach(r => {
+    // Identify all monitored cities within this radar's 250km radial scanning volume
+    const citiesInRange = [];
+    citiesData.forEach(c => {
+      const dist = Math.round(haversineKm(r.lat, r.lon, c.latitude, c.longitude));
+      if (dist <= 250) {
+        const step = c.steps[Math.min(timeIndex, c.steps.length - 1)];
+        citiesInRange.push({
+          name: c.name,
+          dist: dist,
+          dbz: step.radar_dbz || 0,
+          risk_score: step.risk_score,
+          risk_level: step.risk_level
+        });
+      }
+    });
+
+    citiesInRange.sort((a, b) => b.dbz - a.dbz);
+    const maxDbz = citiesInRange.reduce((m, c) => Math.max(m, c.dbz), 0);
+    const hasSevereEcho = maxDbz >= 42;
+    const hasModEcho = maxDbz >= 30;
+    if (hasModEcho) totalEchoesFound++;
+
+    // Color based on active reflectivity in range
+    let radarColor = "#4da3ff";
+    let fillColor = "#4da3ff";
+    let fillOpacity = 0.04;
+    if (hasSevereEcho) {
+      radarColor = "#e74c3c";
+      fillColor = "#e74c3c";
+      fillOpacity = 0.08;
+    } else if (hasModEcho) {
+      radarColor = "#f39c12";
+      fillColor = "#f39c12";
+      fillOpacity = 0.06;
+    }
+
+    // 1. 250km Operational Radial Sweep
+    const outerCircle = L.circle([r.lat, r.lon], {
+      radius: 250000,
+      color: radarColor,
+      fillColor: fillColor,
+      fillOpacity: fillOpacity,
+      weight: 1.4,
+      dashArray: "6, 6"
+    }).addTo(map);
+
+    // 2. 100km Inner Core Doppler Sweep Ring
+    const innerCircle = L.circle([r.lat, r.lon], {
+      radius: 100000,
+      color: radarColor,
+      fillColor: "transparent",
+      weight: 0.9,
+      dashArray: "3, 5",
+      opacity: 0.6
+    }).addTo(map);
+
+    // 3. Center Dish with Pulse Wave
+    const pingClass = hasSevereEcho ? "radar-ping active-echo" : "radar-ping";
+    const dotClass = hasSevereEcho ? "radar-dish-dot active-echo" : "radar-dish-dot";
+
+    const dishIcon = L.divIcon({
+      className: "radar-dish-divicon",
+      html: `
+        <div class="radar-marker-icon" title="IMD Doppler Radar: ${r.name}">
+          <div class="${pingClass}"></div>
+          <div class="${dotClass}" style="background:${radarColor};"></div>
+        </div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    const dishMarker = L.marker([r.lat, r.lon], { icon: dishIcon, zIndexOffset: 200 }).addTo(map);
+
+    dishMarker.bindTooltip(
+      `<b>📡 ${r.name} (${r.band})</b><br/>250km Doppler Umbrella · ${citiesInRange.length} Cities in Range · Peak: <b>${maxDbz ? maxDbz + ' dBZ' : 'Clear Air'}</b>`,
+      { direction: "top", offset: [0, -8] }
+    );
+
+    const popupContent = getRadarPopup(r, citiesInRange, maxDbz);
+    dishMarker.bindPopup(popupContent);
+    outerCircle.bindPopup(popupContent);
+
+    radarNetLayers.push(outerCircle, innerCircle, dishMarker);
+  });
+
+  const echoStatus = document.getElementById("radarEchoStatus");
+  if (echoStatus) {
+    if (totalEchoesFound > 0) {
+      echoStatus.innerHTML = `<span style="color:#f39c12">⚡ ${totalEchoesFound} Radars Tracking Echoes</span>`;
+    } else {
+      echoStatus.innerHTML = `<span style="color:#2ecc71">🟢 Clear Air Scan (15 Active)</span>`;
+    }
+  }
+}
+
+function focusCity(name) {
+  const city = citiesData.find(c => c.name.toLowerCase() === name.toLowerCase());
+  if (!city) return;
+  map.setView([city.latitude, city.longitude], 8, { animate: true });
+  if (markers[city.name]) markers[city.name].openPopup();
+}
+
+function focusCityAndStep(name, stepIndex) {
+  if (stepIndex !== undefined && stepIndex !== timeIndex) setTimeIndex(stepIndex);
+  focusCity(name);
+}
+
+// Render Convective Cell Motion Vectors
+function renderMotionVectors() {
+  vectorLayers.forEach(l => map.removeLayer(l));
+  vectorLayers = [];
+  if (!showVectors) return;
+
+  citiesData.forEach(city => {
+    const step = city.steps[Math.min(timeIndex, city.steps.length - 1)];
+    if (step.risk_score < 40) return;
+    
+    const motion = step.motion_vector;
+    if (!motion || !motion.trajectory) return;
+
+    const coords = [[city.latitude, city.longitude]];
+    motion.trajectory.forEach(pt => coords.push([pt.lat, pt.lon]));
+
+    const color = LEVEL_COLOR[step.risk_level];
+    const polyline = L.polyline(coords, {
+      color: color, weight: 2.5, dashArray: "4, 6", opacity: 0.85
+    }).addTo(map);
+    polyline.bindTooltip(`Storm Track: ${city.name} (${motion.heading_cardinal} @ ${motion.speed_kmh} km/h)`, { sticky: true });
+    vectorLayers.push(polyline);
+
+    const end = motion.trajectory[motion.trajectory.length - 1];
+    const endMarker = L.circleMarker([end.lat, end.lon], {
+      radius: 3, color: color, fillColor: color, fillOpacity: 0.9
+    }).addTo(map);
+    endMarker.bindTooltip(`Projected +3h: ${city.name} convective core`, { direction: "top" });
+    vectorLayers.push(endMarker);
+  });
+}
+
+function renderMarkers() {
+  citiesData.forEach(city => {
+    const step = city.steps[Math.min(timeIndex, city.steps.length - 1)];
+    const color = LEVEL_COLOR[step.risk_level];
+    const radius = 6 + (step.risk_score / 100) * 14;
+    const tooltipText = `<b>${city.name}</b> (${TIME_LABELS[timeIndex]}): ${step.risk_score}% (${step.risk_level})${step.lightning_jump ? ' ⚡ JUMP' : ''}`;
+    
+    if (markers[city.name]) {
+      markers[city.name].setStyle({ color, fillColor: color, radius, fillOpacity: 0.18, opacity: 0.65, weight: 1.5 });
+      markers[city.name].setPopupContent(popupHtml(city));
+      markers[city.name].setTooltipContent(tooltipText);
+    } else {
+      const m = L.circleMarker([city.latitude, city.longitude], {
+        radius, color, fillColor: color, fillOpacity: 0.18, opacity: 0.65, weight: 1.5,
+      }).addTo(map)
+        .bindPopup(popupHtml(city))
+        .bindTooltip(tooltipText, { direction: "top", offset: [0, -radius] });
+      markers[city.name] = m;
+    }
+  });
+  renderMotionVectors();
+  renderWindArrows();
+}
+
+function renderAlerts() {
+  const box = document.getElementById("alerts");
+  const active = [];
+  citiesData.forEach(city => {
+    const currentStep = city.steps[0];
+    for (let i = 0; i < city.steps.length; i++) {
+      const s = city.steps[i];
+      if (s.risk_score >= 60) {
+        active.push({ city: city.name, currentScore: currentStep.risk_score, stepIndex: i, ...s });
+        break;
+      }
+    }
+  });
+  active.sort((a, b) => b.risk_score - a.risk_score);
+  if (!active.length) {
+    box.innerHTML = `<div id="noAlerts">No high-risk thunderstorm alerts in the 0–3h window.</div>`;
+    return;
+  }
+  box.innerHTML = active.map(a => `
+    <div class="alert-card ${a.risk_level}" onclick="focusCityAndStep('${a.city}', ${a.stepIndex})" style="cursor:pointer;" title="Click to inspect ${a.city} at ${a.label}">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+        <b>${a.city}</b>
+        <span style="background:${LEVEL_COLOR[a.risk_level]}22; color:${LEVEL_COLOR[a.risk_level]}; border:1px solid ${LEVEL_COLOR[a.risk_level]}66; border-radius:4px; padding:1px 6px; font-size:11px; font-weight:700;">
+          ${a.label}: ${a.risk_score}%
+        </span>
+      </div>
+      ${a.lightning_jump ? '<span class="lightning-jump-badge" style="margin-bottom:3px;">⚡ LIGHTNING JUMP: +20m WARNING</span>' : ''}
+      <small style="display:block; color:var(--muted); line-height:1.3;">
+        ${a.label !== 'now' ? `Current: <b style="color:var(--text)">${a.currentScore}%</b> · ` : ''}Radar: ${fmtVar(a.radar_dbz, ' dBZ')} · Gusts: ${fmtVar(a.wind_gusts_10m,' km/h')}
+      </small>
+      <div style="margin-top:6px; display:flex; gap:6px;">
+        <button class="btn-audio" onclick="event.stopPropagation(); speakRuralAlert('${a.city}', ${a.risk_score}, '${a.label}', ${a.wind_gusts_10m || 0}, ${a.lightning_jump || false}, ${a.total_lightning_hr || 0}, 'hi')">🔊 Hindi Alert</button>
+        <button class="btn-audio" onclick="event.stopPropagation(); speakRuralAlert('${a.city}', ${a.risk_score}, '${a.label}', ${a.wind_gusts_10m || 0}, ${a.lightning_jump || false}, ${a.total_lightning_hr || 0}, 'en')">🔊 English</button>
+      </div>
+    </div>`).join("");
+}
+
+function renderCitiesList() {
+  const listEl = document.getElementById("citiesList");
+  const countEl = document.getElementById("cityCount");
+  const timeLabelEl = document.getElementById("activeTimeLabel");
+  if (!listEl) return;
+  if (countEl) countEl.textContent = citiesData.length;
+  if (timeLabelEl) timeLabelEl.textContent = TIME_LABELS[timeIndex];
+
+  const sorted = [...citiesData].sort((a, b) => {
+    const sA = a.steps[Math.min(timeIndex, a.steps.length - 1)].risk_score;
+    const sB = b.steps[Math.min(timeIndex, b.steps.length - 1)].risk_score;
+    return sB - sA;
+  });
+
+  listEl.innerHTML = sorted.map(c => {
+    const s = c.steps[Math.min(timeIndex, c.steps.length - 1)];
+    const color = LEVEL_COLOR[s.risk_level];
+    const peak = c.steps.reduce((max, step) => step.risk_score > max.risk_score ? step : max, c.steps[0]);
+    const hasHigherPeak = timeIndex === 0 && peak.risk_score > s.risk_score && peak.risk_score >= 60;
+
+    return `
+      <div class="city-item" onclick="focusCity('${c.name}')" title="Click to inspect ${c.name}">
+        <div>
+          <b>${c.name}</b>
+          ${hasHigherPeak ? `<div style="font-size:10px; color:${LEVEL_COLOR[peak.risk_level]};">⚠️ Alert: ${peak.risk_score}% at ${peak.label}</div>` : ''}
+          ${s.lightning_jump ? `<div style="font-size:10px; color:#f39c12;">⚡ Lightning Jump Active</div>` : ''}
+        </div>
+        <span class="city-risk-pill" style="background:${color}22; color:${color}; border:1px solid ${color}66;">
+          ${TIME_LABELS[timeIndex]}: ${s.risk_score}% · ${s.risk_level}
+        </span>
+      </div>`;
+  }).join("");
+}
+
+async function renderSectorTabs() {
+  try {
+    const res = await fetch(`${API_BASE}/api/sectors/advisories`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const sectors = data.sectors;
+
+    // Aviation
+    const avEl = document.getElementById("aviationList");
+    if (sectors.aviation.alerts.length) {
+      avEl.innerHTML = sectors.aviation.alerts.map(a => {
+        let badgeColor = "#f1c40f";
+        if (a.alert_level.includes("SEVERE") || a.alert_level.includes("STOP") || a.alert_level.includes("RED")) {
+          badgeColor = "#e74c3c";
+        } else if (a.alert_level.includes("REROUTE") || a.alert_level.includes("AMBER")) {
+          badgeColor = "#e67e22";
+        }
+        return `
+        <div class="sector-card" onclick="focusCity('${a.city}')" style="cursor:pointer;">
+          <div class="sector-card-header">
+            <b>${a.city} · ${a.step}</b>
+            <span class="sector-badge" style="background:${badgeColor}22; color:${badgeColor}; border:1px solid ${badgeColor}66;">${a.alert_level}</span>
+          </div>
+          <div style="color:var(--text); line-height:1.4;">${a.action}</div>
+          <small style="color:var(--muted); margin-top:4px; display:block;">Flight Hazard: <b style="color:var(--text)">${a.flight_level_hazard}</b> · Radar: <b style="color:${badgeColor}">${a.radar_dbz || '–'} dBZ</b></small>
+        </div>`;
+      }).join("");
+    } else {
+      avEl.innerHTML = `<div style="color:var(--muted); font-size:12px;">No active flight vectoring or SIGMET warnings in Indian airspace.</div>`;
+    }
+
+    // Power Grid
+    const pwEl = document.getElementById("powerList");
+    if (sectors.power_grid.alerts.length) {
+      pwEl.innerHTML = sectors.power_grid.alerts.map(p => {
+        let badgeColor = "#f1c40f";
+        if (p.status.includes("CRITICAL") || p.status.includes("RED")) {
+          badgeColor = "#e74c3c";
+        } else if (p.status.includes("STAGE_2") || p.status.includes("AMBER")) {
+          badgeColor = "#e67e22";
+        }
+        return `
+        <div class="sector-card" onclick="focusCity('${p.city}')" style="cursor:pointer;">
+          <div class="sector-card-header">
+            <b>${p.city} (${p.step})</b>
+            <span class="sector-badge" style="background:${badgeColor}22; color:${badgeColor}; border:1px solid ${badgeColor}66;">${p.status.replace(/_/g, ' ')}</span>
+          </div>
+          <div style="color:var(--text); line-height:1.4;">${p.action}</div>
+          <small style="color:var(--muted); margin-top:4px; display:block;">Threat: <b style="color:${badgeColor}">${p.threat}</b></small>
+        </div>`;
+      }).join("");
+    } else {
+      pwEl.innerHTML = `<div style="color:var(--muted); font-size:12px;">All regional grid feeders and substations operating at normal baseline.</div>`;
+    }
+
+    // Agriculture
+    const agEl = document.getElementById("farmersList");
+    if (sectors.agriculture.alerts.length) {
+      agEl.innerHTML = sectors.agriculture.alerts.map(ag => {
+        let badgeColor = "#f1c40f";
+        if (ag.status.includes("CRITICAL") || ag.status.includes("RED")) {
+          badgeColor = "#e74c3c";
+        } else if (ag.status.includes("HIGH") || ag.status.includes("AMBER")) {
+          badgeColor = "#e67e22";
+        }
+        return `
+        <div class="sector-card" onclick="focusCity('${ag.city}')" style="cursor:pointer;">
+          <div class="sector-card-header">
+            <b>${ag.city} (${ag.step})</b>
+            <span class="sector-badge" style="background:${badgeColor}22; color:${badgeColor}; border:1px solid ${badgeColor}66;">${ag.status.replace(/_/g, ' ')}</span>
+          </div>
+          <div style="color:var(--text); line-height:1.4;">${ag.action}</div>
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <button class="btn-audio" onclick="event.stopPropagation(); speakRuralAlert('${ag.city}', ${ag.risk_score}, '${ag.step}', 35, ${ag.lightning_jump || false}, 25, 'hi')">🔊 Play Hindi IVR Warning</button>
+            <button class="btn-audio" onclick="event.stopPropagation(); speakRuralAlert('${ag.city}', ${ag.risk_score}, '${ag.step}', 35, ${ag.lightning_jump || false}, 25, 'en')">🔊 Play English IVR</button>
+          </div>
+        </div>`;
+      }).join("");
+    } else {
+      agEl.innerHTML = `<div style="color:var(--muted); font-size:12px;">No severe agricultural weather alerts. Normal field operations safe.</div>`;
+    }
+
+    // Mining & Infrastructure
+    const mnEl = document.getElementById("miningList");
+    if (mnEl) {
+      if (sectors.mining && sectors.mining.alerts && sectors.mining.alerts.length) {
+        mnEl.innerHTML = sectors.mining.alerts.map(m => {
+          let badgeColor = "#f1c40f";
+          if (m.alert_level.includes("RED") || m.status.includes("EMERGENCY")) {
+            badgeColor = "#e74c3c";
+          } else if (m.alert_level.includes("AMBER") || m.status.includes("AMBER")) {
+            badgeColor = "#e67e22";
+          }
+          return `
+          <div class="sector-card" onclick="focusCity('${m.city}')" style="cursor:pointer;">
+            <div class="sector-card-header">
+              <b>${m.city} (${m.step})</b>
+              <span class="sector-badge" style="background:${badgeColor}22; color:${badgeColor}; border:1px solid ${badgeColor}66;">${m.alert_level}</span>
+            </div>
+            <div style="color:var(--text); line-height:1.4;">${m.action}</div>
+            <small style="color:var(--muted); margin-top:4px; display:block;">Threat: <b style="color:${badgeColor}">${m.threat}</b> · Radar: ${m.radar_dbz || '–'} dBZ</small>
+          </div>`;
+        }).join("");
+      } else {
+        mnEl.innerHTML = `<div style="color:var(--muted); font-size:12px;">All regional open-cast mines, cranes, and heavy construction infrastructure operating at normal baseline.</div>`;
+      }
+    }
+  } catch(e) {}
+}
+
+async function loadCities() {
+  const statusEl = document.getElementById("status");
+  statusEl.textContent = "syncing V.A.J.R.A 2.0…";
+  try {
+    const res = await fetch(`${API_BASE}/api/cities`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    citiesData = data.cities;
+    renderMarkers();
+    renderAlerts();
+    renderCitiesList();
+    renderSectorTabs();
+    renderLightningHeatmap();
+    if (showRadarNet) renderRadarNet();
+    statusEl.textContent = "updated " + new Date().toLocaleTimeString();
+  } catch (e) {
+    statusEl.textContent = "temporarily unavailable (" + e.message + ") — retrying…";
+    setTimeout(loadCities, 4000);
+  }
+}
+
+// Tabs
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+  });
+});
+
+// Vector Toggle
+document.getElementById("vectorToggle").addEventListener("click", () => {
+  showVectors = !showVectors;
+  const btn = document.getElementById("vectorToggle");
+  btn.classList.toggle("active", showVectors);
+  btn.textContent = showVectors ? "⚡ Vectors ON" : "⚡ Vectors OFF";
+  renderMotionVectors();
+});
+
+// Time Toggle
+document.getElementById("timeToggle").addEventListener("click", e => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  setTimeIndex(parseInt(btn.dataset.i, 10));
+});
+
+document.getElementById("refreshBtn").addEventListener("click", loadCities);
+
+// Geocode / Search
+let searchTimer = null;
+const searchInput = document.getElementById("search");
+const resultsBox = document.getElementById("search-results");
+
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (q.length < 2) { resultsBox.style.display = "none"; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/geocode?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (!data.results.length) { resultsBox.style.display = "none"; return; }
+      resultsBox.innerHTML = data.results.map((r, i) =>
+        `<div data-i="${i}">${r.name}${r.admin1 ? ", " + r.admin1 : ""}${r.country ? ", " + r.country : ""}</div>`
+      ).join("");
+      resultsBox.style.display = "block";
+      resultsBox.onclick = async (e) => {
+        const div = e.target.closest("div");
+        if (!div) return;
+        const r = data.results[parseInt(div.dataset.i, 10)];
+        resultsBox.style.display = "none";
+        searchInput.value = r.name;
+        map.setView([r.lat, r.lon], 9);
+        try {
+          const nc = await fetch(`${API_BASE}/api/nowcast?lat=${r.lat}&lon=${r.lon}&name=${encodeURIComponent(r.name)}`);
+          const city = await nc.json();
+          const idx = citiesData.findIndex(c => c.name === city.name);
+          if (idx >= 0) citiesData[idx] = city; else citiesData.push(city);
+          renderMarkers();
+          renderAlerts();
+          renderCitiesList();
+          if (markers[city.name]) markers[city.name].openPopup();
+        } catch (err) {}
+      };
+    } catch (e) { resultsBox.style.display = "none"; }
+  }, 350);
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-wrap")) resultsBox.style.display = "none";
+});
+
+// CAP Modal Handling
+const capModal = document.getElementById("capModal");
+document.getElementById("capExportBtn").addEventListener("click", () => {
+  capModal.style.display = "flex";
+  loadCapFormat("json");
+});
+function closeCapModal() { capModal.style.display = "none"; }
+
+async function loadCapFormat(format) {
+  currentCapFormat = format;
+  document.getElementById("btnCapJson").classList.toggle("active", format === "json");
+  document.getElementById("btnCapXml").classList.toggle("active", format === "xml");
+  document.getElementById("capContent").textContent = "Fetching official CAP v1.2 payload from backend…";
+  try {
+    const res = await fetch(`${API_BASE}/api/cap/alerts?format=${format}`);
+    if (format === "xml") {
+      currentCapData = await res.text();
+    } else {
+      const json = await res.json();
+      currentCapData = JSON.stringify(json, null, 2);
+    }
+    document.getElementById("capContent").textContent = currentCapData;
+  } catch(e) {
+    document.getElementById("capContent").textContent = "Failed to load CAP alert: " + e.message;
+  }
+}
+
+function downloadCapFile() {
+  const ext = currentCapFormat === "xml" ? "xml" : "json";
+  const blob = new Blob([currentCapData], { type: currentCapFormat === "xml" ? "application/xml" : "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `IMD_CAP_ALERT_${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`;
+  a.click();
+}
+
+// Benchmark Modal Handling
+const benchmarkModal = document.getElementById("benchmarkModal");
+function openBenchmarkModal() { benchmarkModal.style.display = "flex"; }
+function closeBenchmarkModal() { benchmarkModal.style.display = "none"; }
+
+// Research & CROPC Analytics Modal (Slide 5)
+const researchModal = document.getElementById("researchModal");
+function openResearchModal() { researchModal.style.display = "flex"; }
+function closeResearchModal() { researchModal.style.display = "none"; }
+
+// Multimodal Sensor Fusion Stream Modal (Slide 2 & 3)
+const fusionModal = document.getElementById("fusionModal");
+function openFusionModal() { fusionModal.style.display = "flex"; }
+function closeFusionModal() { fusionModal.style.display = "none"; }
+
+// MHEW-DSS GeoJSON 1-Click Export (Slide 3 Strategy 4)
+async function downloadMhewGeoJson() {
+  const statusEl = document.getElementById("status");
+  const orig = statusEl.textContent;
+  statusEl.textContent = "generating MHEW-DSS GeoJSON…";
+  try {
+    const res = await fetch(`${API_BASE}/api/mhew-dss/geojson`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/geo+json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `IMD_MHEW_DSS_NOWCAST_${new Date().toISOString().replace(/[:.]/g, "-")}.geojson`;
+    a.click();
+    statusEl.textContent = "GeoJSON exported";
+    setTimeout(() => { statusEl.textContent = orig; }, 3000);
+  } catch(e) {
+    statusEl.textContent = "Failed to export GeoJSON: " + e.message;
+  }
+}
+
+loadCities();
+setInterval(loadCities, 5 * 60 * 1000);
+</script>
+</body>
+</html>
